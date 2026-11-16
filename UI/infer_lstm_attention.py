@@ -1,10 +1,9 @@
+import math
+
 import torch
 import torch.nn as nn
-from transformers import AutoTokenizer
-import math 
 import torch.nn.functional as F
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 aspect2idx = {
     'BATTERY': 0, 'CAMERA': 1, 'DESIGN': 2, 'FEATURES': 3,
@@ -13,13 +12,10 @@ aspect2idx = {
 sentiment2idx = {
     'Positive': 0, 'Negative': 1, 'Neutral': 2
 }
-num_aspect = len(aspect2idx)
-
-idx2aspect = dict(zip(aspect2idx.values(), aspect2idx.keys()))
-idx2sentiment = dict(zip(sentiment2idx.values(),sentiment2idx.keys()))
-
-tokenizer = AutoTokenizer.from_pretrained('bkai-foundation-models/vietnamese-bi-encoder')
+idx2aspect = {index: label for label, index in aspect2idx.items()}
+idx2sentiment = {index: label for label, index in sentiment2idx.items()}
 EMBEDDING_DIM = 300
+
 
 class Attention(nn.Module):
     def __init__(self, embed_dim=EMBEDDING_DIM, hidden_dim=None, out_dim=None, n_head=1, score_function='dot_product', dropout=0):
@@ -107,7 +103,7 @@ class ATAE_LSTM(nn.Module):
     def __init__(self, embed_matrix, hidden_dim=128, embedding_dim=EMBEDDING_DIM, polarities_dim=3, num_aspects=10):
         super(ATAE_LSTM, self).__init__()
         
-        self.embed = nn.Embedding.from_pretrained(torch.tensor(embed_matrix, dtype=torch.float))
+        self.embed = nn.Embedding.from_pretrained(torch.as_tensor(embed_matrix, dtype=torch.float))
         self.hidden_dim = hidden_dim
         self.embedding_dim = embedding_dim
         self.num_aspects = num_aspects
@@ -205,52 +201,3 @@ class ATAE_LSTM(nn.Module):
         }
 
         return output
-    
-def infer_LSTM_attention_model(comment):
-    model.eval()
-    # Tokenize input text
-    encoding = tokenizer(comment, padding='max_length', truncation=True, max_length=128, return_tensors='pt')
-    input_ids = encoding['input_ids'].to(device)
-
-    # No labels provided in inference
-    with torch.no_grad():
-        output = model(input_ids)
-
-    pred_category = output['pred_category'].cpu().numpy()
-    pred_sentiment = output['pred_sentiment'].cpu().numpy()
-
-    res = ''
-    for i, v in enumerate(pred_category[0]):  # [0] for batch size 1
-        if v == 1:  # Aspect detected
-            res += f'{idx2aspect[i]}: {idx2sentiment[int(pred_sentiment[0][i])]}'
-            res += '\n'
-
-    return res
-
-# Load model checkpoint
-""""
-checkpoint = torch.load("UI/ATAE_checkpoint20.pth", map_location=device)
-embed_matrix = checkpoint['embed_matrix']
-model = ATAE_LSTM(embed_matrix)
-model.load_state_dict(checkpoint['model_state_dict'])
-model.to(device)
-"""
-# Placeholder for the embedding matrix (shape doesn't matter for loading weights)
-vocab_size = len(tokenizer)
-dummy_embed_matrix = torch.empty(vocab_size-1, EMBEDDING_DIM)  # Replace vocab_size and EMBEDDING_DIM as needed
-
-# Initialize the model with the dummy matrix
-model = ATAE_LSTM(dummy_embed_matrix)
-
-# Load the saved state_dict
-checkpoint = torch.load("UI/ATAE_checkpoint20.pth", map_location=device)
-model.load_state_dict(checkpoint)
-
-# Move the model to the appropriate device
-model.to(device)
-model.eval()
-
-# Example Inference
-comment = "Điện thoại có camera đẹp, giá cả hợp lý"
-result = infer_LSTM_attention_model(comment)
-print(result)

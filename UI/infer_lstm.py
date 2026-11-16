@@ -1,10 +1,6 @@
-
 import torch
 import torch.nn as nn
-from transformers import AutoTokenizer
 
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 aspect2idx = {
     'CAMERA': 0, 'FEATURES': 1, 'BATTERY': 2, 'PERFORMANCE': 3,
@@ -13,12 +9,9 @@ aspect2idx = {
 sentiment2idx = {
     'Positive': 2, 'Neutral': 1, 'Negative': 0
 }
-num_aspect = len(aspect2idx)
+idx2aspect = {index: label for label, index in aspect2idx.items()}
+idx2sentiment = {index: label for label, index in sentiment2idx.items()}
 
-idx2aspect = dict(zip(aspect2idx.values(), aspect2idx.keys()))
-idx2sentiment = dict(zip(sentiment2idx.values(),sentiment2idx.keys()))
-
-tokenizer = AutoTokenizer.from_pretrained('bkai-foundation-models/vietnamese-bi-encoder')
 
 class LSTMBase(nn.Module):
     def __init__(self, word_embedder, categories, polarities):
@@ -108,42 +101,3 @@ class LSTMBase(nn.Module):
         }
 
         return output
-
-
-def infer_LSTM_model(comment):
-    model.eval()
-    # Tokenize input text
-    encoding = tokenizer(comment, padding='max_length', truncation=True, max_length=128, return_tensors='pt')
-    input_ids = encoding['input_ids'].to(device)
-    attention_mask = encoding['attention_mask'].to(device)
-
-    # No labels provided in inference
-    with torch.no_grad():
-        output = model(input_ids, labels=None, mask=attention_mask)
-
-    pred_category = output['pred_category']
-    pred_sentiment = output['pred_sentiment']
-
-    res = ''
-    pred_category = pred_category.squeeze()
-    pred_sentiment = pred_sentiment.squeeze()
-    for i, v in enumerate(pred_category):
-        if v!=0:
-            res += f'{idx2aspect[i]}: {idx2sentiment[int(pred_sentiment[i])]}'
-            res += '\n'
-
-    return res
-
-embedding_dim = 150
-vocab = tokenizer.get_vocab()
-vocab_size = len(vocab)
-
-embedding_layer = nn.Embedding(vocab_size, embedding_dim)
-
-categories = aspect2idx.keys()
-polarities = sentiment2idx.keys()
-model = LSTMBase(embedding_layer, categories, polarities)
-
-model.load_state_dict(torch.load("D:\code\intro_ai_ABSA\LSTMBase_checkpoint50.pth",map_location=torch.device('cpu')))
-model.eval()
-

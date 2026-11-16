@@ -1,12 +1,8 @@
 import torch
 import torch.nn as nn
-import numpy as np 
-import numpy as np 
-from transformers import AutoTokenizer
 from torch.nn.functional import softmax
-tokenizer = AutoTokenizer.from_pretrained('bkai-foundation-models/vietnamese-bi-encoder')
-# Define aspect and sentiment mappings
-num_aspect=10
+
+
 aspect2idx = {
     'CAMERA': 0, 'FEATURES': 1, 'BATTERY': 2, 'PERFORMANCE': 3,
     'DESIGN': 4, 'GENERAL': 5, 'PRICE': 6, 'SCREEN': 7, 'SER&ACC': 8, 'STORAGE': 9
@@ -14,14 +10,9 @@ aspect2idx = {
 sentiment2idx = {
     'Positive': 2, 'Neutral': 1, 'Negative': 0
 }
-embedding_dim=150
-vocab=tokenizer.get_vocab()
-vocab_size=len(vocab)
-embedding_layer=nn.Embedding(vocab_size, embedding_dim)
-vocab=tokenizer.get_vocab()
-vocab_size=len(vocab)
-categories=aspect2idx.keys()
-polarities=sentiment2idx.keys()
+idx2aspect = {index: label for label, index in aspect2idx.items()}
+idx2sentiment = {index: label for label, index in sentiment2idx.items()}
+
 
 class HierachyAttention(nn.Module):
     def __init__(self, in_features, out_features, bias=True, softmax=True):
@@ -53,18 +44,6 @@ def element_mul(input1, input2, return_not_sum_result=False):
         else:
             return result
 
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-num_aspect = len(aspect2idx)
-
-idx2aspect = dict(zip(aspect2idx.values(), aspect2idx.keys()))
-idx2sentiment = dict(zip(sentiment2idx.values(),sentiment2idx.keys()))
-
-
-# Initialize tokenizer
-tokenizer = AutoTokenizer.from_pretrained('bkai-foundation-models/vietnamese-bi-encoder')
 
 class JointModel(nn.Module):
     def __init__(self, word_embedder, categories, polarities):
@@ -183,32 +162,3 @@ class JointModel(nn.Module):
         }
 
         return output
-categories = aspect2idx.keys()
-polarities = sentiment2idx.keys()
-model1 = JointModel(embedding_layer, categories, polarities)
-
-model1.load_state_dict(torch.load('D:\code\intro_ai_ABSA\CAE____\CAE_checkpoint41.pth',map_location=torch.device('cpu')))
-model1.eval()
-
-def infer_CAE_model(comment):
-    model1.eval()
-    # Tokenize input text
-    encoding = tokenizer(comment, padding='max_length', truncation=True, max_length=128, return_tensors='pt')
-    input_ids = encoding['input_ids'].to(device)
-    attention_mask = encoding['attention_mask'].to(device)
-
-    # No labels provided in inference
-    with torch.no_grad():
-        output= model1(input_ids, labels=None, mask=attention_mask)
-
-    pred_category = output['pred_category']
-    pred_sentiment = output['pred_sentiment']
-    res = ''
-    pred_category = pred_category.squeeze()
-    pred_sentiment = pred_sentiment.squeeze()
-    for i, v in enumerate(pred_category):
-        if v!=0:
-            res += f'{idx2aspect[i]}: {idx2sentiment[int(pred_sentiment[i])]}'
-            res += '\n'
-
-    return res
